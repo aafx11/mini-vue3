@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+
+<body>
+  <script src="../node_modules/@vue/reactivity/dist/reactivity.global.js"></script>
+  <script>
+    let { reactive, shallowReactive, readonly, shallowReadonly } = VueReactivity
+    let reactiveTest = reactive({ name: 'test', age: { num: 20 } })
+    console.log('reactive深层代理', reactiveTest.age);
+
+    let shallowReactiveTest = shallowReactive({ name: 'test', age: { num: 20 } })
+    console.log('shallowReactive浅代理,只代理第一层', shallowReactiveTest);
+
+    console.log('shallowReactive浅代理,第二层后的属性为普通对象', shallowReactiveTest.age);
+
+    let readonlyTest = readonly({ name: 'test', age: { num: 20 } })
+    readonlyTest.age.num = 19;
+
+    let shallowReadonlyTest = shallowReadonly({ name: 'test', age: { num: 20 } })
+    shallowReadonlyTest.name = 'test_02' // 只有第一层属性为只读
+    shallowReadonlyTest.age.num = 19;
+  </script>
+</body>
+
+</html>

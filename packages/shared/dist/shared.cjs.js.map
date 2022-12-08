@@ -1,1 +1,1 @@
-{"version":3,"file":"shared.cjs.js","sources":[],"sourcesContent":[],"names":[],"mappings":";;;;;;;;"}
+{"version":3,"file":"shared.cjs.js","sources":["../src/index.ts"],"sourcesContent":["// 公共函数\r\n\r\n// 是否是对象类型\r\nexport const isObject = (value) => typeof value == 'object' && value !== null\r\n\r\n// 合并对象\r\nexport const extend = Object.assign"],"names":[],"mappings":";;;;AAAA;AAEA;MACa,QAAQ,GAAG,CAAC,KAAK,KAAK,OAAO,KAAK,IAAI,QAAQ,IAAI,KAAK,KAAK,KAAI;AAE7E;MACa,MAAM,GAAG,MAAM,CAAC;;;;;"}

@@ -1,9 +1,7 @@
-import { shared } from '@vue/shared';
-
-const reactivity = {
-
-}
-
+// index.ts作为入口文件，不实现具体功能，只导出方法
 export {
-  reactivity
-}
+  reactive,
+  shallowReactive,
+  shallowReadonly,
+  readonly
+} from './reactive'
