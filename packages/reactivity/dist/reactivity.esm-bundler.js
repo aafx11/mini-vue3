@@ -26,12 +26,18 @@ function createGetter(isReadonly = false, isShallow = false) {
     return function get(target, key, receiver) {
         // proxy + reflect的应用
         const res = Reflect.get(target, key, receiver); // 相当于 target[key]
+        // 不是只读，收集依赖，数据变化后更新对应的试图
+        if (!isReadonly) {
+            // effect 函数(参考effect.ts文件)执行时,会进行取值，触发get方法，就能收集依赖（收集effect），使响应式数据和effect函数产生关联
+            console.log('执行effect,收集effect:', key);
+        }
         // 是浅代理并且只读,返回get的结果(target[key])
         if (isShallow) {
             return res;
         }
         /**
-         * 当获取到的res是一个对象，将res对象再包一层响应式(readonly() 或 reactive() )
+         * 只读，深度代理
+         * 深度代理,当获取到的res是一个对象，再将原始对象转换成proxy对象，将res对象再包一层响应式(readonly() 或 reactive() )
          * Vue2是完整遍历整个对象的所有属性进行代理，Vue3 的代理模式是懒代理,用到哪层属性，再将这层的属性进行代理
          */
         if (isObject(res)) {
@@ -125,5 +131,30 @@ function createReactiveObject(target, isReadonly, baseHandler) {
     return proxy;
 }
 
-export { reactive, readonly, shallowReactive, shallowReadonly };
+/**
+ * effect副作用函数，将这个effect变成响应式的effect，做到数据发生变化，就重新执行effect函数更新视图
+ * @param fn
+ * @param options
+ */
+function effect(fn, options = {}) {
+    const effect = createReactiveEffect(fn, options);
+    // 响应式的effect会默认执行一次，如果options配置了lazy 懒执行，则不执行effect()
+    if (!options.lazy) {
+        effect();
+    }
+    return effect;
+}
+let uid = 0;
+function createReactiveEffect(fn, options) {
+    const effect = function reactiveEffect() {
+        fn();
+    };
+    effect.id = uid++; // 标识每个effect的唯一性
+    effect._isEffect = true; // 标识这个是响应式effect ，并且是私有变量，外部无法获取
+    effect.raw = fn; // 保存原函数
+    effect.options = options; // 保存配置项
+    return effect;
+}
+
+export { effect, reactive, readonly, shallowReactive, shallowReadonly };
 //# sourceMappingURL=reactivity.esm-bundler.js.map

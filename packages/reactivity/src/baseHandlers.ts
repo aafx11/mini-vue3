@@ -1,4 +1,6 @@
 import { extend, isObject } from '@vue/shared';
+import { track } from './effect';
+import { TrackOpTypes } from './operators';
 import { reactive, readonly } from './reactive';
 /**
  * baseHandlers.js
@@ -27,7 +29,10 @@ function createGetter(isReadonly = false, isShallow = false) {
 
     // 不是只读，收集依赖，数据变化后更新对应的试图
     if (!isReadonly) {
-
+      // effect 函数(参考effect.ts文件)执行时,会进行取值，触发get方法，就能收集依赖（收集effect），使响应式数据和effect函数产生关联
+      console.log('执行effect,收集effect:', key);
+      // TrackOpTypes.GET 当对这个对象（target）的属性(key)进行get操作时，进行依赖收集
+      track(target, TrackOpTypes.GET, key)
     }
 
     // 是浅代理并且只读,返回get的结果(target[key])
@@ -36,7 +41,8 @@ function createGetter(isReadonly = false, isShallow = false) {
     }
 
     /**
-     * 当获取到的res是一个对象，将res对象再包一层响应式(readonly() 或 reactive() )
+     * 只读，深度代理
+     * 深度代理,当获取到的res是一个对象，再将原始对象转换成proxy对象，将res对象再包一层响应式(readonly() 或 reactive() )
      * Vue2是完整遍历整个对象的所有属性进行代理，Vue3 的代理模式是懒代理,用到哪层属性，再将这层的属性进行代理
      */
     if (isObject(res)) {
