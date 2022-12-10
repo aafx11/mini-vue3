@@ -14,14 +14,13 @@
   <script src="../node_modules/@vue/reactivity/dist/reactivity.global.js"></script>
   <script>
     let { reactive, effect } = VueReactivity
-    let reactiveTest = reactive({ name: 'test', age: { num: 20 } });
+    let reactiveTest = reactive({ name: 'test', age: { num: 20 },other:'123' });
     effect(() => {
-      console.log('执行函数');
       app.innerHTML = reactiveTest.name + reactiveTest.age.num
     });
 
     setTimeout(() => {
-      reactiveTest.name = 'test_02'
+      reactiveTest.other = '456'
     }, 1000);
   </script>
 </body>

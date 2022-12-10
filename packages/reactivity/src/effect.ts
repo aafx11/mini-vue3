@@ -18,27 +18,63 @@ let activeEffect // 存储当前执行的effect函数，使track 函数中，可
 const effectStack = [] // 存储多个effect函数，并且最后一个effect 永远是当前执行的effect 函数
 function createReactiveEffect(fn, options) {
   const effect = function reactiveEffect() {
-    try {
-      effectStack.push(effect) // 入栈
-      activeEffect = effect
-      return fn() // fn 函数会有返回值
-    } finally { // fn 函数可能会报错，try-finally 能保证fn 函数执行完后，出栈
-      effectStack.pop() // fn 函数执行完后，出栈
-      activeEffect = effectStack[effectStack.length - 1]
+    // 当 effect 函数 不在 effectStack 栈中，再执行入栈，防止同一个effect重复入栈，防止无限执行
+    if (!effectStack.includes(effect)) {
+      try {
+        effectStack.push(effect) // 入栈
+        activeEffect = effect
+        return fn() // fn 函数会有返回值
+      } finally { // fn 函数可能会报错，try-finally 能保证fn 函数执行完后，出栈
+        effectStack.pop() // fn 函数执行完后，出栈
+        activeEffect = effectStack[effectStack.length - 1]
+      }
     }
   }
+
   effect.id = uid++ // 标识每个effect的唯一性
   effect._isEffect = true // 标识这个是响应式effect ，并且是私有变量，外部无法获取
   effect.raw = fn // 保存原函数
   effect.options = options // 保存配置项
+
   return effect
 }
 
+const targetMap = new WeakMap()
+// track 函数,收集依赖，让某个对象(target)中的某个属性(key)，收集当前对应的effect函数
 export function track(target, type, key) {
-  activeEffect
+  // 此属性(key)不需要收集依赖 , 因为没在 effect 中执行
+  if (activeEffect === undefined) {
+    return
+  }
+
+  let depsMap = targetMap.get(target) // 获取到的是一个Map
+  if (!depsMap) {
+    targetMap.set(target, (depsMap = new Map))
+  }
+  let dep = depsMap.get(key) // key 对应的依赖收集
+  if (!dep) {
+    depsMap.set(key, (dep = new Set))
+  }
+  if (!dep.has(activeEffect)) {
+    dep.add(activeEffect)
+  }
+  console.log('targetMap', targetMap);
+  let test
+  console.log('test',test = new Set);
+
 }
 
 /**
+ * 对象的属性和对应的多个 effect 之间的关系 
+ * target ：{ name: 'test', age: { num: 20 }
+ * key ：name 
+ * 对应的effect（可能为多个）: [effect1 , effect2]
+ * 如何去存储 对象--> 属性--> effect 的三层关系？
+ * WeakMap(1) key为 对象， value 还是为一个 Map(2) ，Map(2) 的 key 为属性，value 为一个 Set（Set可以去重） 存储多个effect  
+ */
+
+/**
+ * 为什么需要 effectStack 栈来存储 effect 函数？
  * let activeEffect ,如果直接将当前执行的effect函数赋值给 activeEffect 来保存，无法处理嵌套effect 的情况
  * effect(()=>{ 第一个effect 是effect1
  *  
