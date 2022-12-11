@@ -1,8 +1,12 @@
-// 公共函数
-// 是否是对象类型
-const isObject = (value) => typeof value == 'object' && value !== null;
-// 合并对象
-const extend = Object.assign;
+/* 公共函数 */
+/* 判断数据类型 */
+const isObject = (value) => typeof value == 'object' && value !== null; // 是否是对象类型
+const isArray = Array.isArray;
+const isIntegerKey = (key) => parseInt(key) + '' === key; // 判断是否是数组索引
+let hasOwnProperty = Object.prototype.hasOwnProperty;
+const hasOwn = (target, key) => hasOwnProperty.call(target, key); // 判断对象是否有该属性
+const hasChanged = (oldValue, value) => oldValue !== value; // 判断旧值和新修改的值，是否相等
+const extend = Object.assign; // 合并对象
 
 /**
  * effect副作用函数，将这个effect变成响应式的effect，做到数据发生变化，就重新执行effect函数更新视图
@@ -60,7 +64,48 @@ function track(target, type, key) {
         dep.add(activeEffect);
     }
     console.log('targetMap', targetMap);
-    console.log('test', new Set);
+}
+// 触发更新
+function trigger(target, type, key, newValue, oldValue) {
+    console.log(target, type, key, newValue, oldValue);
+    // 判断这个属性有无收集过 effect ，如果无，则不需要触发更新
+    const depsMap = targetMap.get(target); // 得到的是一个Map(当前这个对象属性的所有依赖，有选择性的触发更新) ， key 是属性 ，value 是对应的 effect
+    if (!depsMap)
+        return;
+    // 将所有需要执行的 effect，全部存到一个新的集合中，最后一起执行 (effects 需要防止重复，为 Set 可以去重，在examples文件夹中的effect.html 中 ，数组元素的下标和数组长度对应同一个effect )
+    const effects = new Set();
+    const add = (effectsToAdd) => {
+        if (effectsToAdd) {
+            effectsToAdd.forEach(effect => effects.add(effect));
+        }
+    };
+    if (key === 'length' && isArray(target)) { // 修改数组长度
+        depsMap.forEach((dep, key) => {
+            /**
+             * 在target 为数组，key 为length的情况下，depsMap里的key 可能为数组下标或数组长度length
+             * 在examples文件夹中的effect.html 中
+             * reactiveTest.arr.length = 1 ，当前 newValue 就为1
+             * 而 effect 函数中app.innerHTML = reactiveTest.arr[2] ，key 为2
+             * 则 key(2) > newValue(1) ，需要触发更新(即数组长度的修改，覆盖到了数组原有的元素)
+             */
+            if (key === 'length' || key > newValue) {
+                add(dep); // dep是属性对应的 effect
+            }
+        });
+    }
+    else { // 除去修改数组长度的特殊操作,剩余对象或数组的 ADD,SET 操作
+        if (key !== void 0) { // key不等于 undefined，有key，为SET(修改)操作
+            add(depsMap.get(key)); // 取出 effect 并放入 effects
+        }
+        switch (type) {
+            case "add" /* TriggerOpTypes.ADD */:
+                if (isArray(target) && isIntegerKey(key)) {
+                    add(depsMap.get('length'));
+                }
+                break;
+        }
+    }
+    effects.forEach((effect) => effect());
 }
 /**
  * 对象的属性和对应的多个 effect 之间的关系
@@ -102,24 +147,24 @@ function track(target, type, key) {
  * Reflect 方法具备返回值，能通知使用者，方法是否调用成功
  */
 /**
- * 拦截获取功能的具体实现
+ * createGetter 拦截获取功能的具体实现
  * @param isReadonly 是否只读
- * @param isShallow 是否浅代理，只代理对象的第一层属性
+ * @param shallow 是否浅代理，只代理对象的第一层属性
  */
-function createGetter(isReadonly = false, isShallow = false) {
+function createGetter(isReadonly = false, shallow = false) {
     // 获取原始对象的某个属性值，receiver 代理后的对象,如 let proxy = reactive({obj:{}}) , 代理后的对象就是proxy
     return function get(target, key, receiver) {
+        console.log('get', key);
         // proxy + reflect的应用
         const res = Reflect.get(target, key, receiver); // 相当于 target[key]
         // 不是只读，收集依赖，数据变化后更新对应的试图
         if (!isReadonly) {
-            console.log('非只读收集依赖');
             // effect 函数(参考effect.ts文件)执行时,会进行取值，触发get方法，就能收集依赖（收集effect），使响应式数据和effect函数产生关联
             // TrackOpTypes.GET 当对这个对象（target）的属性(key)进行get操作时，进行依赖收集(如template中v-model双向绑定，在初始化取值，就会触发get)
-            track(target, 0 /* TrackOpTypes.GET */, key);
+            track(target, "get" /* TrackOpTypes.GET */, key);
         }
         // 是浅代理并且只读,返回get的结果(target[key])
-        if (isShallow) {
+        if (shallow) {
             return res;
         }
         /**
@@ -128,19 +173,33 @@ function createGetter(isReadonly = false, isShallow = false) {
          * Vue2是完整遍历整个对象的所有属性进行代理，Vue3 的代理模式是懒代理,用到哪层属性，再将这层的属性进行代理
          */
         if (isObject(res)) {
-            console.log('深度代理');
             return isReadonly ? readonly(res) : reactive(res);
         }
         return res;
     };
 }
 /**
- * 拦截设置功能的具体实现
- * @param isShallow 是否浅代理，只代理对象的第一层属性
+ * createSetter 拦截设置功能的具体实现
+ * 当数据更新触发 set 时，通知对应属性的对应 effect 重新执行
+ * 需要区分是新增（对象中新增属性，数组中新增元素）还是修改（修改对象中原有的属性，修改数组中原有的元素）
+ * 修改还会出现，新修改的值和旧的值相等的情况
+ * vue2 里无法监控更改索引，无法监控数组长度
+ * @param shallow 是否浅代理，只代理对象的第一层属性
  */
-function createSetter(isShallow = false) {
+function createSetter(shallow = false) {
     return function set(target, key, value, receiver) {
+        const oldValue = target[key]; // 获取修改前的值
+        // hadKey 用于判断是新增还是修改操作
+        let hadKey = isArray(target) && isIntegerKey(key) ? // 判断是否是数组，key 是否是整数索引
+            Number(key) < target.length : // 如果key比数组长度小，则是修改，否则是新增
+            hasOwn(target, key); // 不是数组，判断该对象(target)中是否含有这个属性(key)，判断是新增还是修改
         const result = Reflect.set(target, key, value, receiver); // 相当于target[key] = value
+        if (!hadKey) { // 新增操作
+            trigger(target, "add" /* TriggerOpTypes.ADD */, key, value);
+        }
+        else if (hasChanged(oldValue, value)) { // 修改操作，但是新修改的值和旧值不相等
+            trigger(target, "set" /* TriggerOpTypes.SET */, key, value, oldValue);
+        }
         return result;
     };
 }

@@ -1,6 +1,6 @@
-import { extend, isObject } from '@vue/shared';
-import { track } from './effect';
-import { TrackOpTypes } from './operators';
+import { extend, isObject, isArray, isIntegerKey, hasOwn, hasChanged } from '@vue/shared';
+import { track, trigger } from './effect';
+import { TrackOpTypes, TriggerOpTypes } from './operators';
 import { reactive, readonly } from './reactive';
 /**
  * baseHandlers.js
@@ -19,25 +19,25 @@ import { reactive, readonly } from './reactive';
 /**
  * createGetter 拦截获取功能的具体实现
  * @param isReadonly 是否只读
- * @param isShallow 是否浅代理，只代理对象的第一层属性
+ * @param shallow 是否浅代理，只代理对象的第一层属性
  */
-function createGetter(isReadonly = false, isShallow = false) {
+function createGetter(isReadonly = false, shallow = false) {
   // 获取原始对象的某个属性值，receiver 代理后的对象,如 let proxy = reactive({obj:{}}) , 代理后的对象就是proxy
   return function get(target, key, receiver) {
+    console.log('get', key);
+
     // proxy + reflect的应用
     const res = Reflect.get(target, key, receiver) // 相当于 target[key]
 
     // 不是只读，收集依赖，数据变化后更新对应的试图
     if (!isReadonly) {
-      console.log('非只读收集依赖');
-      
       // effect 函数(参考effect.ts文件)执行时,会进行取值，触发get方法，就能收集依赖（收集effect），使响应式数据和effect函数产生关联
       // TrackOpTypes.GET 当对这个对象（target）的属性(key)进行get操作时，进行依赖收集(如template中v-model双向绑定，在初始化取值，就会触发get)
       track(target, TrackOpTypes.GET, key)
     }
 
     // 是浅代理并且只读,返回get的结果(target[key])
-    if (isShallow) {
+    if (shallow) {
       return res
     }
 
@@ -55,13 +55,28 @@ function createGetter(isReadonly = false, isShallow = false) {
 }
 /**
  * createSetter 拦截设置功能的具体实现
- * @param isShallow 是否浅代理，只代理对象的第一层属性
+ * 当数据更新触发 set 时，通知对应属性的对应 effect 重新执行
+ * 需要区分是新增（对象中新增属性，数组中新增元素）还是修改（修改对象中原有的属性，修改数组中原有的元素）
+ * 修改还会出现，新修改的值和旧的值相等的情况
+ * vue2 里无法监控更改索引，无法监控数组长度
+ * @param shallow 是否浅代理，只代理对象的第一层属性
  */
-function createSetter(isShallow = false) {
+function createSetter(shallow = false) {
   return function set(target, key, value, receiver) {
+    const oldValue = target[key] // 获取修改前的值
+
+    // hadKey 用于判断是新增还是修改操作
+    let hadKey = isArray(target) && isIntegerKey(key) ? // 判断是否是数组，key 是否是整数索引
+      Number(key) < target.length : // 如果key比数组长度小，则是修改，否则是新增
+      hasOwn(target, key) // 不是数组，判断该对象(target)中是否含有这个属性(key)，判断是新增还是修改
+
     const result = Reflect.set(target, key, value, receiver) // 相当于target[key] = value
 
-    // 当数据更新触发 set 时，通知对应属性的对应 effect 重新执行
+    if (!hadKey) { // 新增操作
+      trigger(target, TriggerOpTypes.ADD, key, value)
+    } else if (hasChanged(oldValue, value)) { // 修改操作，但是新修改的值和旧值不相等
+      trigger(target, TriggerOpTypes.SET, key, value, oldValue)
+    }
     return result
   }
 }

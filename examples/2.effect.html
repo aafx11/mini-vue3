@@ -14,13 +14,23 @@
   <script src="../node_modules/@vue/reactivity/dist/reactivity.global.js"></script>
   <script>
     let { reactive, effect } = VueReactivity
-    let reactiveTest = reactive({ name: 'test', age: { num: 20 },other:'123' });
+    let reactiveTest = reactive({ name: 'test', age: 20, other: '123', arr: [1, 2, 3] });
     effect(() => {
-      app.innerHTML = reactiveTest.name + reactiveTest.age.num
+      console.log('render');
+      // app.innerHTML = reactiveTest.name + reactiveTest.age
+      // app.innerHTML = reactiveTest.arr[2] + reactiveTest.arr.length
+      app.innerHTML = reactiveTest.arr // 直接取数组，会将数组转成字符串（toString，toString会取length），会取长度
     });
 
     setTimeout(() => {
-      reactiveTest.other = '456'
+      // reactiveTest.add = 'add' // 对象新增属性操作
+      // reactiveTest.name = 'test02' // 对象修改了name属性，应该重新执行effect，完成视图更新
+      // reactiveTest.arr.push(4) // 数组新增元素操作
+      // reactiveTest.arr[0] = 11 // 数组修改操作
+
+      // reactiveTest.arr.length = 1 // 修改数组长度的情况
+
+      reactiveTest.arr[10] = 10 // 原数组没有下标为10的元素，这种情况应该触发数组长度length 对应的 effect
     }, 1000);
   </script>
 </body>

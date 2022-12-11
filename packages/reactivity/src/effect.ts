@@ -1,3 +1,5 @@
+import { isArray, isIntegerKey } from '@vue/shared';
+import { TriggerOpTypes } from './operators';
 /**
  * effect副作用函数，将这个effect变成响应式的effect，做到数据发生变化，就重新执行effect函数更新视图
  * @param fn 
@@ -59,9 +61,55 @@ export function track(target, type, key) {
     dep.add(activeEffect)
   }
   console.log('targetMap', targetMap);
-  let test
-  console.log('test',test = new Set);
 
+}
+
+// 触发更新，找到属性对应的 effect ，让其执行
+export function trigger(target, type, key?, newValue?, oldValue?) {
+  console.log(target, type, key, newValue, oldValue);
+  // 判断这个属性有无收集过 effect ，如果无，则不需要触发更新
+  const depsMap = targetMap.get(target) // 得到的是一个Map(当前这个对象属性的所有依赖，有选择性的触发更新) ， key 是属性 ，value 是对应的 effect
+  if (!depsMap) return
+
+  // 将所有需要执行的 effect，全部存到一个新的集合中，最后一起执行 (effects 需要防止重复，为 Set 可以去重，在examples文件夹中的effect.html 中 ，数组元素的下标和数组长度对应同一个effect )
+  const effects = new Set()
+  const add = (effectsToAdd) => {
+    if (effectsToAdd) {
+      effectsToAdd.forEach(effect => effects.add(effect));
+    }
+  }
+
+  if (key === 'length' && isArray(target)) { // 修改数组长度
+    depsMap.forEach((dep, key) => {
+      /**
+       * 在target 为数组，key 为length的情况下，depsMap里的key 可能为数组下标或数组长度length
+       * 在examples文件夹中的effect.html 中
+       * reactiveTest.arr.length = 1 ，当前 newValue 就为1
+       * 而 effect 函数中app.innerHTML = reactiveTest.arr[2] ，key 为2 
+       * 则 key(2) > newValue(1) ，需要触发更新(即数组长度的修改，覆盖到了数组原有的元素)
+       */
+      if (key === 'length' || key > newValue) {
+        add(dep) // dep是属性对应的 effect
+      }
+    });
+  } else { // 除去修改数组长度的特殊操作,剩余对象或数组的 ADD,SET 操作
+    if (key !== void 0) { // key不等于 undefined，有key，为SET(修改)操作
+      add(depsMap.get(key)) // 取出 effect 并放入 effects
+    }
+
+    switch (type) {
+      case TriggerOpTypes.ADD:
+        // 如果数组添加了一个索引，触发长度的更新
+        if (isArray(target) && isIntegerKey(key)) {
+          add(depsMap.get('length'))
+        }
+        break;
+
+      default:
+        break;
+    }
+  }
+  effects.forEach((effect: any) => effect())
 }
 
 /**
