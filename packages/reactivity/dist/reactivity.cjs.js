@@ -13,6 +13,10 @@ const hasChanged = (oldValue, value) => oldValue !== value; // 判断旧值和�
 const extend = Object.assign; // 合并对象
 
 /**
+ * effect 中所有属性都会收集依赖（收集对应effect）， track 跟踪（收集）依赖
+ * 当这个属性发生变化 就会重新执行effect trigger 触发更新
+ */
+/**
  * effect副作用函数，将这个effect变成响应式的effect，做到数据发生变化，就重新执行effect函数更新视图
  * @param fn
  * @param options
@@ -69,7 +73,7 @@ function track(target, type, key) {
     }
     console.log('targetMap', targetMap);
 }
-// 触发更新
+// 触发更新，找到属性对应的 effect ，让其执行
 function trigger(target, type, key, newValue, oldValue) {
     console.log(target, type, key, newValue, oldValue);
     // 判断这个属性有无收集过 effect ，如果无，则不需要触发更新
@@ -103,6 +107,7 @@ function trigger(target, type, key, newValue, oldValue) {
         }
         switch (type) {
             case "add" /* TriggerOpTypes.ADD */:
+                // 如果数组添加了一个索引，触发长度的更新
                 if (isArray(target) && isIntegerKey(key)) {
                     add(depsMap.get('length'));
                 }
@@ -282,9 +287,40 @@ function createReactiveObject(target, isReadonly, baseHandler) {
     return proxy;
 }
 
+/**
+ * ref 和 reactive 的区别 ，reactive 底层采用proxy，ref 底层采用 defineProperty
+ * 为什么有reactive 还需要 ref 呢？因为 reactive 只能处理对象，处理不了原始数据类型，new Proxy(target,handler) target只能是对象(object)类型
+ */
+/**
+ * ref 将普通数据类型包装成响应式对象，该对象里的value属性，就是它的值
+ * @param value value是原始数据类型也可以是对象，或者数组,但如果value是对象，用reactive更合理，因为 defineProperty 是针对对象的某一个属性的
+ */
+function ref(value) {
+    return createRef(value);
+}
+function shallowRef(value) {
+    return createRef(value, true);
+}
+class RefImpl {
+    rawValue;
+    shallow;
+    _value;
+    __v_isRef = true; // 表示是这个 ref 属性
+    // constructor 构造器的参数前添加public 修饰符，会将该参数添加到类的实例上
+    constructor(rawValue, shallow) {
+        this.rawValue = rawValue;
+        this.shallow = shallow;
+    }
+}
+function createRef(rawValue, shallow = false) {
+    return new RefImpl(rawValue, shallow);
+}
+
 exports.effect = effect;
 exports.reactive = reactive;
 exports.readonly = readonly;
+exports.ref = ref;
 exports.shallowReactive = shallowReactive;
 exports.shallowReadonly = shallowReadonly;
+exports.shallowRef = shallowRef;
 //# sourceMappingURL=reactivity.cjs.js.map

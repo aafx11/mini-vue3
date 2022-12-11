@@ -1,6 +1,12 @@
 import { isArray, isIntegerKey } from '@vue/shared';
 import { TriggerOpTypes } from './operators';
 /**
+ * effect 中所有属性都会收集依赖（收集对应effect）， track 跟踪（收集）依赖
+ * 当这个属性发生变化 就会重新执行effect trigger 触发更新
+ */
+
+
+/**
  * effect副作用函数，将这个effect变成响应式的effect，做到数据发生变化，就重新执行effect函数更新视图
  * @param fn 
  * @param options 
