@@ -12,11 +12,17 @@
   <script src="../node_modules/@vue/reactivity/dist/reactivity.global.js"></script>
   <div id="app"></div>
   <script>
-    let { ref, shallowRef, effect } = VueReactivity
+    let { ref, shallowRef, toRef, effect } = VueReactivity
     let refTest = ref('test')
-    console.log('refTest', refTest);
+    let objRefTest = ref({
+      name: {
+        text: 'example'
+      }
+    })
+    // 当 ref 的目标为一个多层对象时，取内部对象(name对象)值时，会将该对象通过 reactive() 转换成响应式对象（proxy）
+    console.log('objRefTest', objRefTest.value.name)
     effect(() => {
-      app.innerHtml = refTest.value
+      app.innerHTML = refTest.value
     });
 
     setTimeout(() => {

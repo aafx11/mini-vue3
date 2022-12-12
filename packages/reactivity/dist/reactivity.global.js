@@ -70,11 +70,9 @@ var VueReactivity = (function (exports) {
       if (!dep.has(activeEffect)) {
           dep.add(activeEffect);
       }
-      console.log('targetMap', targetMap);
   }
   // 触发更新，找到属性对应的 effect ，让其执行
   function trigger(target, type, key, newValue, oldValue) {
-      console.log(target, type, key, newValue, oldValue);
       // 判断这个属性有无收集过 effect ，如果无，则不需要触发更新
       const depsMap = targetMap.get(target); // 得到的是一个Map(当前这个对象属性的所有依赖，有选择性的触发更新) ， key 是属性 ，value 是对应的 effect
       if (!depsMap)
@@ -162,7 +160,6 @@ var VueReactivity = (function (exports) {
   function createGetter(isReadonly = false, shallow = false) {
       // 获取原始对象的某个属性值，receiver 代理后的对象,如 let proxy = reactive({obj:{}}) , 代理后的对象就是proxy
       return function get(target, key, receiver) {
-          console.log('get', key);
           // proxy + reflect的应用
           const res = Reflect.get(target, key, receiver); // 相当于 target[key]
           // 不是只读，收集依赖，数据变化后更新对应的试图
@@ -206,7 +203,7 @@ var VueReactivity = (function (exports) {
               trigger(target, "add" /* TriggerOpTypes.ADD */, key, value);
           }
           else if (hasChanged(oldValue, value)) { // 修改操作，但是新修改的值和旧值不相等
-              trigger(target, "set" /* TriggerOpTypes.SET */, key, value, oldValue);
+              trigger(target, "set" /* TriggerOpTypes.SET */, key, value);
           }
           return result;
       };
@@ -300,6 +297,7 @@ var VueReactivity = (function (exports) {
   function shallowRef(value) {
       return createRef(value, true);
   }
+  const convert = (val) => isObject(val) ? reactive(val) : val;
   class RefImpl {
       rawValue;
       shallow;
@@ -309,11 +307,70 @@ var VueReactivity = (function (exports) {
       constructor(rawValue, shallow) {
           this.rawValue = rawValue;
           this.shallow = shallow;
+          this._value = this.shallow ?
+              rawValue : // 浅代理，直接赋值原始值
+              convert(rawValue); // 深代理，如果是对象，包装一层reactive
+      }
+      // 类的属性访问器
+      get value() {
+          track(this, "get" /* TrackOpTypes.GET */, 'value'); // this 为这个类的实例本身，是一个对象
+          return this._value;
+      }
+      set value(newValue) {
+          if (hasChanged(newValue, this.rawValue)) { // 判断新set的值和原始值是否有变化
+              this.rawValue = newValue; // 如果有变化，新值替换原始值（rawValue始终是原始值的拷贝）
+              this._value = this.shallow ? newValue : convert(newValue);
+          }
+          trigger(this, "set" /* TriggerOpTypes.SET */, 'value', newValue);
       }
   }
   function createRef(rawValue, shallow = false) {
       return new RefImpl(rawValue, shallow);
   }
+  class ObjectRefImpl {
+      target;
+      key;
+      _value;
+      __v_isRef = true;
+      constructor(target, key) {
+          this.target = target;
+          this.key = key;
+      }
+      get value() {
+          return this.target[this.key];
+      }
+      set value(newValue) {
+          this.target[this.key] = newValue;
+      }
+  }
+  /**
+   * 将响应式对象的属性转换成 ref （用于结构响应式对象）
+   * @param target 响应式对象
+   * @param key 属性
+   * @returns ObjectRefImpl 实例
+   */
+  function toRef(target, key) {
+      return new ObjectRefImpl(target, key);
+  }
+  // 循环调用 ref , object可能为对象或数组
+  function toRefs(object) {
+      const ret = isArray(object) ? new Array(object.length) : {};
+      for (let key in object) {
+          ret[key] = toRef(object, key);
+      }
+      return ret;
+  }
+  /**
+   * 为什么需要toRef ？
+   * let proxy = reactive({ name: 'test', title: '标题' })
+   * // let { name } = proxy // 结构会破坏响应式，取出来的name 就是 'test' 字符串，
+   * app.innerHTML = name 无法触发 get 收集依赖(track)
+   * name = 'test02' 无法触发 set 触发更新(trigger)
+   *
+   * 当用toRef时， let nameRef = toRef(proxy, 'name')
+   * app.innerHTML = name ，实际上是 this.target[this.key] ，target 就是一个响应式对象，相当于 proxy.name ，触发get，收集到依赖(track)
+   * name = 'test02' 实际上是 this.target[this.key] = newValue ,相当于 proxy.name 'test02'，触发set，触发更新(trigger)
+   */
 
   exports.effect = effect;
   exports.reactive = reactive;
@@ -322,6 +379,8 @@ var VueReactivity = (function (exports) {
   exports.shallowReactive = shallowReactive;
   exports.shallowReadonly = shallowReadonly;
   exports.shallowRef = shallowRef;
+  exports.toRef = toRef;
+  exports.toRefs = toRefs;
 
   Object.defineProperty(exports, '__esModule', { value: true });
 

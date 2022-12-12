@@ -24,8 +24,6 @@ import { reactive, readonly } from './reactive';
 function createGetter(isReadonly = false, shallow = false) {
   // 获取原始对象的某个属性值，receiver 代理后的对象,如 let proxy = reactive({obj:{}}) , 代理后的对象就是proxy
   return function get(target, key, receiver) {
-    console.log('get', key);
-
     // proxy + reflect的应用
     const res = Reflect.get(target, key, receiver) // 相当于 target[key]
 

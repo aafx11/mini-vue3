@@ -66,13 +66,10 @@ export function track(target, type, key) {
   if (!dep.has(activeEffect)) {
     dep.add(activeEffect)
   }
-  console.log('targetMap', targetMap);
-
 }
 
 // 触发更新，找到属性对应的 effect ，让其执行
 export function trigger(target, type, key?, newValue?, oldValue?) {
-  console.log(target, type, key, newValue, oldValue);
   // 判断这个属性有无收集过 effect ，如果无，则不需要触发更新
   const depsMap = targetMap.get(target) // 得到的是一个Map(当前这个对象属性的所有依赖，有选择性的触发更新) ， key 是属性 ，value 是对应的 effect
   if (!depsMap) return
